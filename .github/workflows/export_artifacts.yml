@@ -1,3 +1,4 @@
+# .github/workflows/export.yml
 name: Exportar Recursos (Modular)
 
 on:
@@ -35,7 +36,7 @@ on:
         default: false
 
 jobs:
-  validate-and-export:
+  export:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -45,21 +46,38 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Cargar configuración del ambiente
-        id: env
+      # ==============================
+      # 1. CARGAR CONFIG + CALCULAR CARPETA
+      # ==============================
+      - name: Configurar variables
+        id: vars
         run: |
           ENV=${{ inputs.environment }}
+          DATE=$(date +'%Y-%m-%d')
+          FOLDER="exports/release-${ENV}-${DATE}"
+          
+          echo "environment=${ENV}" >> $GITHUB_OUTPUT
+          echo "date=${DATE}" >> $GITHUB_OUTPUT
+          echo "folder=${FOLDER}" >> $GITHUB_OUTPUT
+          
+          # Cargar ambiente
           jq -r ".${ENV}" environments.json > env.json
           echo "accountId=$(jq -r '.accountId' env.json)" >> $GITHUB_OUTPUT
           echo "connectInstanceId=$(jq -r '.connectInstanceId' env.json)" >> $GITHUB_OUTPUT
           echo "region=$(jq -r '.region' env.json)" >> $GITHUB_OUTPUT
 
+      # ==============================
+      # 2. VALIDAR SELECCIÓN
+      # ==============================
       - name: Validar selección
         if: ${{ !inputs.export_all && !inputs.lambdas && !inputs.flows && !inputs.queues && !inputs.users }}
         run: |
           echo "ERROR: Debe seleccionar al menos un recurso o 'Exportar TODO'"
           exit 1
 
+      # ==============================
+      # 3. CONFIGURAR PYTHON Y AWS
+      # ==============================
       - name: Configurar Python
         uses: actions/setup-python@v5
         with:
@@ -71,65 +89,53 @@ jobs:
       - name: Configurar AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ steps.env.outputs.accountId }}:role/d3c-GitHubAction-AssumeRoleWithAction
-          aws-region: ${{ steps.env.outputs.region }}
+          role-to-assume: arn:aws:iam::${{ steps.vars.outputs.accountId }}:role/d3c-GitHubAction-AssumeRoleWithAction
+          aws-region: ${{ steps.vars.outputs.region }}
           role-session-name: export-${{ inputs.environment }}-${{ github.run_id }}
 
       # ==============================
-      # EXPORTAR LAMBDAS
+      # 4. EXPORTAR RECURSOS (MODULAR)
       # ==============================
       - name: Exportar Lambdas
         if: ${{ inputs.export_all || inputs.lambdas }}
         env:
-          ENVIRONMENT: ${{ inputs.environment }}
-          EXPORT_FOLDER: exports/release-${{ inputs.environment }}-$(date +'%Y-%m-%d')
+          EXPORT_FOLDER: ${{ steps.vars.outputs.folder }}
         run: |
           mkdir -p ${{ env.EXPORT_FOLDER }}/lambdas
           python export_lambdas.py
 
-      # ==============================
-      # EXPORTAR FLOWS
-      # ==============================
       - name: Exportar Flows
         if: ${{ inputs.export_all || inputs.flows }}
         env:
-          ENVIRONMENT: ${{ inputs.environment }}
-          CONNECT_INSTANCE_ID: ${{ steps.env.outputs.connectInstanceId }}
-          EXPORT_FOLDER: exports/release-${{ inputs.environment }}-$(date +'%Y-%m-%d')
+          EXPORT_FOLDER: ${{ steps.vars.outputs.folder }}
+          CONNECT_INSTANCE_ID: ${{ steps.vars.outputs.connectInstanceId }}
         run: |
           mkdir -p ${{ env.EXPORT_FOLDER }}/Flows
           python export_flows.py
 
-      # ==============================
-      # EXPORTAR QUEUES
-      # ==============================
       - name: Exportar Queues
         if: ${{ inputs.export_all || inputs.queues }}
         env:
-          EXPORT_FOLDER: exports/release-${{ inputs.environment }}-$(date +'%Y-%m-%d')
+          EXPORT_FOLDER: ${{ steps.vars.outputs.folder }}
         run: |
           mkdir -p ${{ env.EXPORT_FOLDER }}/queues
           python export_queues.py
 
-      # ==============================
-      # EXPORTAR USUARIOS
-      # ==============================
       - name: Exportar Usuarios
         if: ${{ inputs.export_all || inputs.users }}
         env:
-          ENVIRONMENT: ${{ inputs.environment }}
-          CONNECT_INSTANCE_ID: ${{ steps.env.outputs.connectInstanceId }}
-          EXPORT_FOLDER: exports/release-${{ inputs.environment }}-$(date +'%Y-%m-%d')
+          EXPORT_FOLDER: ${{ steps.vars.outputs.folder }}
+          CONNECT_INSTANCE_ID: ${{ steps.vars.outputs.connectInstanceId }}
         run: |
           mkdir -p ${{ env.EXPORT_FOLDER }}/users
           python export_users.py
 
       # ==============================
-      # RESUMEN Y COMMIT
+      # 5. RESUMEN Y COMMIT
       # ==============================
       - name: Generar config.json y Commit
         run: |
-          EXPORT_FOLDER="exports/release-${{ inputs.environment }}-$(date +'%Y-%m-%d')"
+          FOLDER="${{ steps.vars.outputs.folder }}"
           SELECTED=()
           ${{ inputs.export_all }} && SELECTED+=("all")
           ${{ inputs.lambdas }} && SELECTED+=("lambdas")
@@ -137,10 +143,10 @@ jobs:
           ${{ inputs.queues }} && SELECTED+=("queues")
           ${{ inputs.users }} && SELECTED+=("users")
 
-          cat > ${{ env.EXPORT_FOLDER }}/config.json << EOF
+          cat > ${FOLDER}/config.json << 'EOF'
           {
             "source": "${{ inputs.environment }}",
-            "date": "$(date +'%Y-%m-%d')",
+            "date": "${{ steps.vars.outputs.date }}",
             "exported": [$(printf '"%s",' "${SELECTED[@]}" | sed 's/,$//')]
           }
           EOF
@@ -148,7 +154,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "actions@github.com"
           git add exports/
-          git commit -m "Export: ${{ inputs.environment }} - $(printf '%s ' "${SELECTED[@]}") - $(date +'%Y-%m-%d')"
+          git commit -m "Export: ${{ inputs.environment }} - $(printf '%s ' "${SELECTED[@]}") - ${{ steps.vars.outputs.date }}"
           git push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
