@@ -1,0 +1,8 @@
+{
+  "source_environment": "sbx",
+  "export_date": "2025-10-22",
+  "connectInstanceId": "3715976d-b4f4-421a-adf0-268d8fdb2249",
+  "lambdas": [
+    "hl-test"
+  ]
+}
