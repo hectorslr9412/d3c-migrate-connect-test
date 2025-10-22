@@ -1,5 +1,4 @@
-# .github/workflows/export.yml
-name: Exportar Ambiente (AssumeRole)
+name: Exportar Recursos (Modular)
 
 on:
   workflow_dispatch:
@@ -8,14 +7,35 @@ on:
         description: 'Ambiente a exportar'
         required: true
         type: choice
-        options:
-          - dev
-          - sbx
-          - qa
-          - prod
+        options: [dev, sbx, qa, prod]
+
+      export_all:
+        description: 'Exportar TODO'
+        type: boolean
+        default: false
+
+      lambdas:
+        description: 'Lambdas'
+        type: boolean
+        default: true
+
+      flows:
+        description: 'Amazon Connect Flows'
+        type: boolean
+        default: false
+
+      queues:
+        description: 'Amazon Connect Queues'
+        type: boolean
+        default: false
+
+      users:
+        description: 'Usuarios de Connect'
+        type: boolean
+        default: false
 
 jobs:
-  export:
+  validate-and-export:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -34,6 +54,12 @@ jobs:
           echo "connectInstanceId=$(jq -r '.connectInstanceId' env.json)" >> $GITHUB_OUTPUT
           echo "region=$(jq -r '.region' env.json)" >> $GITHUB_OUTPUT
 
+      - name: Validar selección
+        if: ${{ !inputs.export_all && !inputs.lambdas && !inputs.flows && !inputs.queues && !inputs.users }}
+        run: |
+          echo "ERROR: Debe seleccionar al menos un recurso o 'Exportar TODO'"
+          exit 1
+
       - name: Configurar Python
         uses: actions/setup-python@v5
         with:
@@ -42,31 +68,86 @@ jobs:
       - name: Instalar dependencias
         run: pip install boto3 requests jq
 
-      - name: Configurar AWS (OIDC + AssumeRole)
+      - name: Configurar AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ steps.env.outputs.accountId }}:role/d3c-GitHubAction-AssumeRoleWithAction
+          role-to-assume: arn:aws:iam::${{ steps.env.outputs.accountId }}:role/GitHubActionsRole
           aws-region: ${{ steps.env.outputs.region }}
-          role-session-name: export-${{ inputs.environment }}-${{ github.run_id }}
 
-      - name: Crear lambdas.txt (ejemplo)
+      # ==============================
+      # EXPORTAR LAMBDAS
+      # ==============================
+      - name: Exportar Lambdas
+        if: ${{ inputs.export_all || inputs.lambdas }}
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          EXPORT_FOLDER: exports/release-${{ inputs.environment }}-$(date +'%Y-%m-%d')
         run: |
-          cat > lambdas.txt << 'EOF'
-          hl-test
-          EOF
+          mkdir -p ${{ env.EXPORT_FOLDER }}/lambdas
+          python export_lambdas.py
 
-      - name: Ejecutar exportación
+      # ==============================
+      # EXPORTAR FLOWS
+      # ==============================
+      - name: Exportar Flows
+        if: ${{ inputs.export_all || inputs.flows }}
         env:
           ENVIRONMENT: ${{ inputs.environment }}
           CONNECT_INSTANCE_ID: ${{ steps.env.outputs.connectInstanceId }}
-        run: python export_lambdas.py
-
-      - name: Commit y Push
+          EXPORT_FOLDER: exports/release-${{ inputs.environment }}-$(date +'%Y-%m-%d')
         run: |
+          mkdir -p ${{ env.EXPORT_FOLDER }}/Flows
+          python export_flows.py
+
+      # ==============================
+      # EXPORTAR QUEUES
+      # ==============================
+      - name: Exportar Queues
+        if: ${{ inputs.export_all || inputs.queues }}
+        env:
+          EXPORT_FOLDER: exports/release-${{ inputs.environment }}-$(date +'%Y-%m-%d')
+        run: |
+          mkdir -p ${{ env.EXPORT_FOLDER }}/queues
+          python export_queues.py
+
+      # ==============================
+      # EXPORTAR USUARIOS
+      # ==============================
+      - name: Exportar Usuarios
+        if: ${{ inputs.export_all || inputs.users }}
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          CONNECT_INSTANCE_ID: ${{ steps.env.outputs.connectInstanceId }}
+          EXPORT_FOLDER: exports/release-${{ inputs.environment }}-$(date +'%Y-%m-%d')
+        run: |
+          mkdir -p ${{ env.EXPORT_FOLDER }}/users
+          python export_users.py
+
+      # ==============================
+      # RESUMEN Y COMMIT
+      # ==============================
+      - name: Generar config.json y Commit
+        run: |
+          EXPORT_FOLDER="exports/release-${{ inputs.environment }}-$(date +'%Y-%m-%d')"
+          SELECTED=()
+          ${{ inputs.export_all }} && SELECTED+=("all")
+          ${{ inputs.lambdas }} && SELECTED+=("lambdas")
+          ${{ inputs.flows }} && SELECTED+=("flows")
+          ${{ inputs.queues }} && SELECTED+=("queues")
+          ${{ inputs.users }} && SELECTED+=("users")
+
+          cat > ${{ env.EXPORT_FOLDER }}/config.json << EOF
+          {
+            "source": "${{ inputs.environment }}",
+            "date": "$(date +'%Y-%m-%d')",
+            "exported": [$(printf '"%s",' "${SELECTED[@]}" | sed 's/,$//')]
+          }
+          EOF
+
           git config user.name "github-actions[bot]"
           git config user.email "actions@github.com"
           git add exports/
-          git commit -m "Export: ${{ inputs.environment }} - $(date +'%Y-%m-%d')"
+          git commit -m "Export: ${{ inputs.environment }} - $(printf '%s ' "${SELECTED[@]}") - $(date +'%Y-%m-%d')"
           git push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

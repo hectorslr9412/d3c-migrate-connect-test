@@ -1,0 +1,16 @@
+{
+  "lambdas": [
+    "hl-test",
+    "hl_mcim_auth"
+  ],
+  "flows": [
+    "D3clarity: Customer Profiles"
+  ],
+  "queues": [
+    "TesQueue"
+  ],
+  "users": [
+    "juan.perez",
+    "ana.gomez"
+  ]
+}
