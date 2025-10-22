@@ -6,7 +6,7 @@ on:
       release:
         description: 'Release a importar'
         required: true
-        type: string  # Changed from 'choice' to 'string'
+        type: string
       lambdas:
         description: 'Importar Lambdas'
         type: boolean

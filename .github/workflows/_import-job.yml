@@ -1,0 +1,54 @@
+name: Import Job
+
+on:
+  workflow_call:
+    inputs:
+      release:
+        description: 'Release to import'
+        required: true
+        type: string
+      environment:
+        description: 'Target environment (dev, qa, prod)'
+        required: true
+        type: string
+      lambdas:
+        description: 'Import Lambdas'
+        required: false
+        type: boolean
+        default: true
+      flows:
+        description: 'Import Flows'
+        required: false
+        type: boolean
+        default: false
+      queues:
+        description: 'Import Queues'
+        required: false
+        type: boolean
+        default: false
+      users:
+        description: 'Import Users'
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      inherited_secrets:
+        description: 'Inherited secrets for the import job'
+        required: true
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Import release
+        run: |
+          echo "Importing release ${{ inputs.release }} to ${{ inputs.environment }}"
+          echo "Lambdas: ${{ inputs.lambdas }}"
+          echo "Flows: ${{ inputs.flows }}"
+          echo "Queues: ${{ inputs.queues }}"
+          echo "Users: ${{ inputs.users }}"
+          # Add your actual import logic here, e.g., a script or command
+          # Example: ./import.sh --release "${{ inputs.release }}" --env "${{ inputs.environment }}" --lambdas "${{ inputs.lambdas }}"
