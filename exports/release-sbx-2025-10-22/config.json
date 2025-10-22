@@ -1,0 +1,5 @@
+{
+  "source": "sbx",
+  "date": "2025-10-22",
+  "exported": [$(printf '"%s",' "${SELECTED[@]}" | sed 's/,$//')]
+}
