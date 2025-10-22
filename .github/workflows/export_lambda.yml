@@ -73,6 +73,7 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::${{ steps.env.outputs.accountId }}:role/d3c-GitHubAction-AssumeRoleWithAction
           aws-region: ${{ steps.env.outputs.region }}
+          role-session-name: export-${{ inputs.environment }}-${{ github.run_id }}
 
       # ==============================
       # EXPORTAR LAMBDAS
