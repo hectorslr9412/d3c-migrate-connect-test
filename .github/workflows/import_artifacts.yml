@@ -7,12 +7,13 @@ on:
         description: 'Nombre exacto del release a importar (ej: release-dev-2025-10-22)'
         required: true
         type: string
+        default: release-sbx-2025-10-22
 
       target_envs:
         description: 'Ambiente destino'
         required: true
         type: choice
-        options: [sbx, qa, prod]
+        options: [dev, sbx, qa, prod]
 
       import_all:
         description: 'Importar TODO'
