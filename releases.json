@@ -1,0 +1,10 @@
+[
+  {
+    "name": "release-sbx-2025-10-22",
+    "environment": "sbx",
+    "date": "2025-10-22",
+    "exported": [
+      "lambdas"
+    ]
+  }
+]
