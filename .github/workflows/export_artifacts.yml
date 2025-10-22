@@ -143,6 +143,7 @@ jobs:
           ${{ inputs.queues }} && SELECTED+=("queues")
           ${{ inputs.users }} && SELECTED+=("users")
 
+          # === GUARDAR CONFIG ===
           cat > ${FOLDER}/config.json << 'EOF'
           {
             "source": "${{ inputs.environment }}",
@@ -151,9 +152,13 @@ jobs:
           }
           EOF
 
+          # === AGREGAR RELEASE A releases.txt ===
+          RELEASE_NAME=$(basename "$FOLDER")
+          echo "$RELEASE_NAME" >> releases.txt
+
           git config user.name "github-actions[bot]"
           git config user.email "actions@github.com"
-          git add exports/
+          git add exports/ releases.txt
           git commit -m "Export: ${{ inputs.environment }} - $(printf '%s ' "${SELECTED[@]}") - ${{ steps.vars.outputs.date }}"
           git push
         env:

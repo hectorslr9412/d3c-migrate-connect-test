@@ -1,4 +1,3 @@
-# .github/workflows/import.yml
 name: Importar Release (Secuencial)
 
 on:
@@ -8,7 +7,7 @@ on:
         description: 'Release a importar'
         required: true
         type: choice
-        # Se genera dinámicamente abajo
+        options: ${{ needs.generate-release-list.outputs.releases }}  # Usar la salida del job
       lambdas:
         description: 'Importar Lambdas'
         type: boolean
@@ -25,7 +24,6 @@ on:
         description: 'Importar Usuarios'
         type: boolean
         default: false
-
       target_dev:
         description: 'Importar a DEV'
         type: boolean
@@ -51,13 +49,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Listar releases
+      - name: Listar releases desde release.txt
         id: list
         run: |
-          RELEASES=$(find exports -maxdepth 1 -type d -name "release-*" | sed 's|exports/||' | sort -r | jq -R . | jq -s .)
-          echo "releases=$RELEASES" >> $GITHUB_OUTPUT
-          echo "Releases encontrados:"
-          echo "$RELEASES" | jq -r '.[]'
+          if [ -f exports/release.txt ]; then
+            RELEASES=$(cat exports/release.txt | sort -r | jq -R . | jq -s .)
+            echo "releases=$RELEASES" >> $GITHUB_OUTPUT
+            echo "Releases encontrados:"
+            echo "$RELEASES" | jq -r '.[]'
+          else
+            echo "ERROR: El archivo exports/release.txt no existe."
+            exit 1
+          fi
 
   # ==============================
   # 2. VALIDAR Y PREPARAR
