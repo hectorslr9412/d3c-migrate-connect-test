@@ -1,10 +1,10 @@
-name: Importar Release (Secuencial)
+name: Importar Release (Simple)
 
 on:
   workflow_dispatch:
     inputs:
       release:
-        description: 'Release a importar'
+        description: 'Nombre del release a importar (ej. release-1.0)'
         required: true
         type: string
       lambdas:
@@ -38,66 +38,28 @@ on:
 
 jobs:
   # ==============================
-  # 1. GENERAR LISTA DE RELEASES
+  # 1. IMPORTAR A DEV
   # ==============================
-  generate-release-list:
+  import-dev:
+    if: ${{ inputs.target_dev }}
     runs-on: ubuntu-latest
-    outputs:
-      releases: ${{ steps.list.outputs.releases }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Listar releases desde release.txt
-        id: list
-        run: |
-          if [ -f release.txt ]; then
-            RELEASES=$(cat release.txt | sort -r | jq -R . | jq -s .)
-            echo "releases=$RELEASES" >> $GITHUB_OUTPUT
-            echo "Releases encontrados:"
-            echo "$RELEASES" | jq -r '.[]'
-          else
-            echo "ERROR: El archivo release.txt no existe en la raíz del repositorio."
-            exit 1
-          fi
+      - name: Importar a DEV
+        uses: ./.github/workflows/_import-job.yml
+        with:
+          release: ${{ inputs.release }}
+          environment: dev
+          lambdas: ${{ inputs.lambdas }}
+          flows: ${{ inputs.flows }}
+          queues: ${{ inputs.queues }}
+          users: ${{ inputs.users }}
+        secrets: inherit
 
   # ==============================
-  # 2. VALIDAR Y PREPARAR
-  # ==============================
-  validate:
-    needs: generate-release-list
-    runs-on: ubuntu-latest
-    steps:
-      - name: Validar release
-        run: |
-          SELECTED="${{ inputs.release }}"
-          AVAILABLE='${{ needs.generate-release-list.outputs.releases }}'
-          if ! echo "$AVAILABLE" | jq -e --arg r "$SELECTED" 'contains([$r])' > /dev/null; then
-            echo "ERROR: Release '$SELECTED' no existe."
-            echo "Disponibles:"
-            echo "$AVAILABLE" | jq -r '.[]'
-            exit 1
-          fi
-          echo "Release válido: $SELECTED"
-
-  # ==============================
-  # 3. IMPORTAR A DEV
-  # ==============================
-  import-dev:
-    if: ${{ inputs.target_dev }}
-    needs: validate
-    uses: ./.github/workflows/_import-job.yml
-    with:
-      release: ${{ inputs.release }}
-      environment: dev
-      lambdas: ${{ inputs.lambdas }}
-      flows: ${{ inputs.flows }}
-      queues: ${{ inputs.queues }}
-      users: ${{ inputs.users }}
-    secrets: inherit
-
-  # ==============================
-  # 4. ESPERAR APROBACIÓN QA
+  # 2. ESPERAR APROBACIÓN QA
   # ==============================
   wait-qa:
     if: ${{ inputs.target_qa }}
@@ -112,23 +74,29 @@ jobs:
           description: '¿Importar a QA?'
 
   # ==============================
-  # 5. IMPORTAR A QA
+  # 3. IMPORTAR A QA
   # ==============================
   import-qa:
     if: ${{ inputs.target_qa }}
     needs: wait-qa
-    uses: ./.github/workflows/_import-job.yml
-    with:
-      release: ${{ inputs.release }}
-      environment: qa
-      lambdas: ${{ inputs.lambdas }}
-      flows: ${{ inputs.flows }}
-      queues: ${{ inputs.queues }}
-      users: ${{ inputs.users }}
-    secrets: inherit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Importar a QA
+        uses: ./.github/workflows/_import-job.yml
+        with:
+          release: ${{ inputs.release }}
+          environment: qa
+          lambdas: ${{ inputs.lambdas }}
+          flows: ${{ inputs.flows }}
+          queues: ${{ inputs.queues }}
+          users: ${{ inputs.users }}
+        secrets: inherit
 
   # ==============================
-  # 6. ESPERAR APROBACIÓN PROD
+  # 4. ESPERAR APROBACIÓN PROD
   # ==============================
   wait-prod:
     if: ${{ inputs.target_prod }}
@@ -143,17 +111,23 @@ jobs:
           description: '¿Importar a PROD? (¡CUIDADO!)'
 
   # ==============================
-  # 7. IMPORTAR A PROD
+  # 5. IMPORTAR A PROD
   # ==============================
   import-prod:
     if: ${{ inputs.target_prod }}
     needs: wait-prod
-    uses: ./.github/workflows/_import-job.yml
-    with:
-      release: ${{ inputs.release }}
-      environment: prod
-      lambdas: ${{ inputs.lambdas }}
-      flows: ${{ inputs.flows }}
-      queues: ${{ inputs.queues }}
-      users: ${{ inputs.users }}
-    secrets: inherit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Importar a PROD
+        uses: ./.github/workflows/_import-job.yml
+        with:
+          release: ${{ inputs.release }}
+          environment: prod
+          lambdas: ${{ inputs.lambdas }}
+          flows: ${{ inputs.flows }}
+          queues: ${{ inputs.queues }}
+          users: ${{ inputs.users }}
+        secrets: inherit
