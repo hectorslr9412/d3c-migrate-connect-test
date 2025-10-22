@@ -6,8 +6,7 @@ on:
       release:
         description: 'Release a importar'
         required: true
-        type: choice
-        options: ${{ needs.generate-release-list.outputs.releases }}  # Usar la salida del job
+        type: string  # Changed from 'choice' to 'string'
       lambdas:
         description: 'Importar Lambdas'
         type: boolean
