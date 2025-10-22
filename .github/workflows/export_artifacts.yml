@@ -133,7 +133,10 @@ jobs:
       # ==============================
       # 5. RESUMEN Y COMMIT
       # ==============================
-      - name: Generar config.json y Commit
+            # ==============================
+      # 5. RESUMEN Y COMMIT
+      # ==============================
+      - name: Generar config.json y actualizar releases.json
         run: |
           FOLDER="${{ steps.vars.outputs.folder }}"
           SELECTED=()
@@ -143,8 +146,8 @@ jobs:
           ${{ inputs.queues }} && SELECTED+=("queues")
           ${{ inputs.users }} && SELECTED+=("users")
 
-          # === GUARDAR CONFIG ===
-          cat > ${FOLDER}/config.json << 'EOF'
+          # === GUARDAR CONFIG DEL RELEASE ===
+          cat > ${FOLDER}/config.json << EOF
           {
             "source": "${{ inputs.environment }}",
             "date": "${{ steps.vars.outputs.date }}",
@@ -152,13 +155,26 @@ jobs:
           }
           EOF
 
-          # === AGREGAR RELEASE A releases.txt ===
           RELEASE_NAME=$(basename "$FOLDER")
-          echo "$RELEASE_NAME" >> releases.txt
 
+          # === ACTUALIZAR releases.json ===
+          RELEASES_FILE="releases.json"
+
+          if [ ! -f "$RELEASES_FILE" ]; then
+            echo "[]" > "$RELEASES_FILE"
+          fi
+
+          jq --arg name "$RELEASE_NAME" \
+             --arg env "${{ inputs.environment }}" \
+             --arg date "${{ steps.vars.outputs.date }}" \
+             --argjson exported "[ $(printf '"%s",' "${SELECTED[@]}" | sed 's/,$//') ]" \
+             '. += [{"name": $name, "environment": $env, "date": $date, "exported": $exported}]' \
+             "$RELEASES_FILE" > tmp.json && mv tmp.json "$RELEASES_FILE"
+
+          # === COMMIT ===
           git config user.name "github-actions[bot]"
           git config user.email "actions@github.com"
-          git add exports/ releases.txt
+          git add exports/ releases.json
           git commit -m "Export: ${{ inputs.environment }} - $(printf '%s ' "${SELECTED[@]}") - ${{ steps.vars.outputs.date }}"
           git push
         env:

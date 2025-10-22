@@ -4,17 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       release_name:
-        description: 'Nombre del release a importar (tomado de releases.txt)'
+        description: 'Release a importar (desde releases.json)'
         required: true
         type: choice
-        options: ${{ fromJson('["placeholder"]') }} # <- Se reemplaza dinámicamente (ver paso 1)
+        options: ${{ fromJson(needs.load-options.outputs.releases_json) }}
 
       target_envs:
-        description: 'Ambientes destino'
+        description: 'Ambiente destino'
         required: true
         type: choice
         options: [sbx, qa, prod]
-      
+
       import_all:
         description: 'Importar TODO'
         type: boolean
@@ -42,23 +42,23 @@ on:
 
 jobs:
   load-options:
-    name: Cargar opciones dinámicas
+    name: Cargar releases.json
     runs-on: ubuntu-latest
     outputs:
-      releases_json: ${{ steps.releases.outputs.releases_json }}
+      releases_json: ${{ steps.parse.outputs.releases_json }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Leer releases.txt y generar JSON
-        id: releases
+      - name: Leer releases.json
+        id: parse
         run: |
-          if [ ! -f releases.txt ]; then
-            echo "Error: releases.txt no existe."
-            exit 1
+          if [ ! -f releases.json ]; then
+            echo "[]" > releases.json
           fi
 
-          releases=$(cat releases.txt | jq -R -s -c 'split("\n")[:-1]')
+          # Extraer solo los nombres de los releases
+          releases=$(jq -c '[.[].name]' releases.json)
           echo "releases_json=$releases" >> $GITHUB_OUTPUT
 
   import:
@@ -82,12 +82,12 @@ jobs:
           ENV=${{ inputs.target_envs }}
           RELEASE=${{ inputs.release_name }}
           FOLDER="exports/${RELEASE}"
-          
+
           if [ ! -d "$FOLDER" ]; then
             echo "Error: No existe el release $RELEASE"
             exit 1
           fi
-          
+
           jq -r ".${ENV}" environments.json > env.json
           echo "accountId=$(jq -r '.accountId' env.json)" >> $GITHUB_OUTPUT
           echo "connectInstanceId=$(jq -r '.connectInstanceId' env.json)" >> $GITHUB_OUTPUT
@@ -114,41 +114,34 @@ jobs:
           role-session-name: import-${{ inputs.target_envs }}-${{ github.run_id }}
 
       # ==============================
-      # 3. IMPORTAR RECURSOS (MODULAR)
+      # 3. IMPORTAR RECURSOS
       # ==============================
       - name: Importar Lambdas
         if: ${{ inputs.import_all || inputs.lambdas }}
         env:
           IMPORT_FOLDER: ${{ steps.vars.outputs.folder }}/lambdas
-        run: |
-          python import_lambdas.py
+        run: python import_lambdas.py
 
       - name: Importar Flows
         if: ${{ inputs.import_all || inputs.flows }}
         env:
           IMPORT_FOLDER: ${{ steps.vars.outputs.folder }}/Flows
           CONNECT_INSTANCE_ID: ${{ steps.vars.outputs.connectInstanceId }}
-        run: |
-          python import_flows.py
+        run: python import_flows.py
 
       - name: Importar Queues
         if: ${{ inputs.import_all || inputs.queues }}
         env:
           IMPORT_FOLDER: ${{ steps.vars.outputs.folder }}/queues
-        run: |
-          python import_queues.py
+        run: python import_queues.py
 
       - name: Importar Usuarios
         if: ${{ inputs.import_all || inputs.users }}
         env:
           IMPORT_FOLDER: ${{ steps.vars.outputs.folder }}/users
           CONNECT_INSTANCE_ID: ${{ steps.vars.outputs.connectInstanceId }}
-        run: |
-          python import_users.py
+        run: python import_users.py
 
-      # ==============================
-      # 4. LOG DE IMPORTACIÓN
-      # ==============================
       - name: Registrar resultado
         run: |
           echo "✅ Importación completada para ${{ inputs.release_name }} → ${{ inputs.target_envs }}"
