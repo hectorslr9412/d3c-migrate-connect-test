@@ -52,13 +52,13 @@ jobs:
       - name: Listar releases desde release.txt
         id: list
         run: |
-          if [ -f exports/release.txt ]; then
-            RELEASES=$(cat exports/release.txt | sort -r | jq -R . | jq -s .)
+          if [ -f release.txt ]; then
+            RELEASES=$(cat release.txt | sort -r | jq -R . | jq -s .)
             echo "releases=$RELEASES" >> $GITHUB_OUTPUT
             echo "Releases encontrados:"
             echo "$RELEASES" | jq -r '.[]'
           else
-            echo "ERROR: El archivo exports/release.txt no existe."
+            echo "ERROR: El archivo release.txt no existe en la raíz del repositorio."
             exit 1
           fi
 
