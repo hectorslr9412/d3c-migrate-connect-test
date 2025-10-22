@@ -102,7 +102,7 @@ jobs:
           EXPORT_FOLDER: ${{ steps.vars.outputs.folder }}
         run: |
           mkdir -p ${{ env.EXPORT_FOLDER }}/lambdas
-          python export_lambdas.py
+          python scripts/export_lambdas.py
 
       - name: Exportar Flows
         if: ${{ inputs.export_all || inputs.flows }}
@@ -111,7 +111,7 @@ jobs:
           CONNECT_INSTANCE_ID: ${{ steps.vars.outputs.connectInstanceId }}
         run: |
           mkdir -p ${{ env.EXPORT_FOLDER }}/Flows
-          python export_flows.py
+          python scripts/export_flows.py
 
       - name: Exportar Queues
         if: ${{ inputs.export_all || inputs.queues }}
@@ -119,7 +119,7 @@ jobs:
           EXPORT_FOLDER: ${{ steps.vars.outputs.folder }}
         run: |
           mkdir -p ${{ env.EXPORT_FOLDER }}/queues
-          python export_queues.py
+          python scripts/export_queues.py
 
       - name: Exportar Usuarios
         if: ${{ inputs.export_all || inputs.users }}
@@ -128,7 +128,7 @@ jobs:
           CONNECT_INSTANCE_ID: ${{ steps.vars.outputs.connectInstanceId }}
         run: |
           mkdir -p ${{ env.EXPORT_FOLDER }}/users
-          python export_users.py
+          python scripts/export_users.py
 
       # ==============================
       # 5. RESUMEN Y COMMIT
