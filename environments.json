@@ -1,0 +1,22 @@
+{
+  "dev": {
+    "accountId": "111111111111",
+    "connectInstanceId": "dev-connect-id",
+    "region": "us-east-1"
+  },
+  "sbx": {
+    "accountId": "094993749728",
+    "connectInstanceId": "3715976d-b4f4-421a-adf0-268d8fdb2249",
+    "region": "us-east-1"
+  },
+  "qa": {
+    "accountId": "333333333333",
+    "connectInstanceId": "qa-connect-id",
+    "region": "us-east-1"
+  },
+  "prod": {
+    "accountId": "444444444444",
+    "connectInstanceId": "prod-connect-id",
+    "region": "us-east-1"
+  }
+}

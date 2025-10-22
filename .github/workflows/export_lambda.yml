@@ -1,0 +1,72 @@
+# .github/workflows/export.yml
+name: Exportar Ambiente (AssumeRole)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Ambiente a exportar'
+        required: true
+        type: choice
+        options:
+          - dev
+          - sbx
+          - qa
+          - prod
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cargar configuración del ambiente
+        id: env
+        run: |
+          ENV=${{ inputs.environment }}
+          jq -r ".${ENV}" environments.json > env.json
+          echo "accountId=$(jq -r '.accountId' env.json)" >> $GITHUB_OUTPUT
+          echo "connectInstanceId=$(jq -r '.connectInstanceId' env.json)" >> $GITHUB_OUTPUT
+          echo "region=$(jq -r '.region' env.json)" >> $GITHUB_OUTPUT
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependencias
+        run: pip install boto3 requests jq
+
+      - name: Configurar AWS (OIDC + AssumeRole)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ steps.env.outputs.accountId }}:role/d3c-GitHubAction-AssumeRoleWithAction
+          aws-region: ${{ steps.env.outputs.region }}
+          role-session-name: export-${{ inputs.environment }}-${{ github.run_id }}
+
+      - name: Crear lambdas.txt (ejemplo)
+        run: |
+          cat > lambdas.txt << 'EOF'
+          hl-test
+          EOF
+
+      - name: Ejecutar exportación
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          CONNECT_INSTANCE_ID: ${{ steps.env.outputs.connectInstanceId }}
+        run: python export_lambdas.py
+
+      - name: Commit y Push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "actions@github.com"
+          git add exports/
+          git commit -m "Export: ${{ inputs.environment }} - $(date +'%Y-%m-%d')"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
