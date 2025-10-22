@@ -1,133 +1,154 @@
-name: Importar Release (Simple)
+name: Importar Recursos (Modular)
 
 on:
   workflow_dispatch:
     inputs:
-      release:
-        description: 'Nombre del release a importar (ej. release-1.0)'
+      release_name:
+        description: 'Nombre del release a importar (tomado de releases.txt)'
         required: true
-        type: string
+        type: choice
+        options: ${{ fromJson('["placeholder"]') }} # <- Se reemplaza dinámicamente (ver paso 1)
+
+      target_envs:
+        description: 'Ambientes destino'
+        required: true
+        type: choice
+        options: [sbx, qa, prod]
+      
+      import_all:
+        description: 'Importar TODO'
+        type: boolean
+        default: false
+
       lambdas:
-        description: 'Importar Lambdas'
+        description: 'Lambdas'
         type: boolean
         default: true
+
       flows:
-        description: 'Importar Flows'
+        description: 'Amazon Connect Flows'
         type: boolean
         default: false
+
       queues:
-        description: 'Importar Queues'
+        description: 'Amazon Connect Queues'
         type: boolean
         default: false
+
       users:
-        description: 'Importar Usuarios'
-        type: boolean
-        default: false
-      target_dev:
-        description: 'Importar a DEV'
-        type: boolean
-        default: true
-      target_qa:
-        description: 'Después → Importar a QA'
-        type: boolean
-        default: false
-      target_prod:
-        description: 'Después → Importar a PROD'
+        description: 'Usuarios de Connect'
         type: boolean
         default: false
 
 jobs:
-  # ==============================
-  # 1. IMPORTAR A DEV
-  # ==============================
-  import-dev:
-    if: ${{ inputs.target_dev }}
+  load-options:
+    name: Cargar opciones dinámicas
     runs-on: ubuntu-latest
+    outputs:
+      releases_json: ${{ steps.releases.outputs.releases_json }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Importar a DEV
-        uses: ./.github/workflows/_import-job.yml
-        with:
-          release: ${{ inputs.release }}
-          environment: dev
-          lambdas: ${{ inputs.lambdas }}
-          flows: ${{ inputs.flows }}
-          queues: ${{ inputs.queues }}
-          users: ${{ inputs.users }}
-        secrets: inherit
+      - name: Leer releases.txt y generar JSON
+        id: releases
+        run: |
+          if [ ! -f releases.txt ]; then
+            echo "Error: releases.txt no existe."
+            exit 1
+          fi
 
-  # ==============================
-  # 2. ESPERAR APROBACIÓN QA
-  # ==============================
-  wait-qa:
-    if: ${{ inputs.target_qa }}
-    needs: import-dev
-    runs-on: ubuntu-latest
-    steps:
-      - name: Esperar aprobación manual
-        uses: trstringer/manual-approval@v1
-        with:
-          approvers: ${{ github.actor }}
-          minimum-approvals: 1
-          description: '¿Importar a QA?'
+          releases=$(cat releases.txt | jq -R -s -c 'split("\n")[:-1]')
+          echo "releases_json=$releases" >> $GITHUB_OUTPUT
 
-  # ==============================
-  # 3. IMPORTAR A QA
-  # ==============================
-  import-qa:
-    if: ${{ inputs.target_qa }}
-    needs: wait-qa
+  import:
+    name: Importar Recursos
     runs-on: ubuntu-latest
+    needs: load-options
+    permissions:
+      contents: write
+      id-token: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Importar a QA
-        uses: ./.github/workflows/_import-job.yml
-        with:
-          release: ${{ inputs.release }}
-          environment: qa
-          lambdas: ${{ inputs.lambdas }}
-          flows: ${{ inputs.flows }}
-          queues: ${{ inputs.queues }}
-          users: ${{ inputs.users }}
-        secrets: inherit
+      # ==============================
+      # 1. CARGAR CONFIG DE DESTINO
+      # ==============================
+      - name: Configurar variables destino
+        id: vars
+        run: |
+          ENV=${{ inputs.target_envs }}
+          RELEASE=${{ inputs.release_name }}
+          FOLDER="exports/${RELEASE}"
+          
+          if [ ! -d "$FOLDER" ]; then
+            echo "Error: No existe el release $RELEASE"
+            exit 1
+          fi
+          
+          jq -r ".${ENV}" environments.json > env.json
+          echo "accountId=$(jq -r '.accountId' env.json)" >> $GITHUB_OUTPUT
+          echo "connectInstanceId=$(jq -r '.connectInstanceId' env.json)" >> $GITHUB_OUTPUT
+          echo "region=$(jq -r '.region' env.json)" >> $GITHUB_OUTPUT
+          echo "folder=${FOLDER}" >> $GITHUB_OUTPUT
+          echo "environment=${ENV}" >> $GITHUB_OUTPUT
 
-  # ==============================
-  # 4. ESPERAR APROBACIÓN PROD
-  # ==============================
-  wait-prod:
-    if: ${{ inputs.target_prod }}
-    needs: import-qa
-    runs-on: ubuntu-latest
-    steps:
-      - name: Esperar aprobación manual
-        uses: trstringer/manual-approval@v1
+      # ==============================
+      # 2. CONFIGURAR PYTHON Y AWS
+      # ==============================
+      - name: Configurar Python
+        uses: actions/setup-python@v5
         with:
-          approvers: ${{ github.actor }}
-          minimum-approvals: 1
-          description: '¿Importar a PROD? (¡CUIDADO!)'
+          python-version: '3.11'
 
-  # ==============================
-  # 5. IMPORTAR A PROD
-  # ==============================
-  import-prod:
-    if: ${{ inputs.target_prod }}
-    needs: wait-prod
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Instalar dependencias
+        run: pip install boto3 requests jq
 
-      - name: Importar a PROD
-        uses: ./.github/workflows/_import-job.yml
+      - name: Configurar AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          release: ${{ inputs.release }}
-          environment: prod
-          lambdas: ${{ inputs.lambdas }}
-          flows: ${{ inputs.flows }}
-          queues: ${{ inputs.queues }}
-          users: ${{ inputs.users }}
-        secrets: inherit
+          role-to-assume: arn:aws:iam::${{ steps.vars.outputs.accountId }}:role/d3c-GitHubAction-AssumeRoleWithAction
+          aws-region: ${{ steps.vars.outputs.region }}
+          role-session-name: import-${{ inputs.target_envs }}-${{ github.run_id }}
+
+      # ==============================
+      # 3. IMPORTAR RECURSOS (MODULAR)
+      # ==============================
+      - name: Importar Lambdas
+        if: ${{ inputs.import_all || inputs.lambdas }}
+        env:
+          IMPORT_FOLDER: ${{ steps.vars.outputs.folder }}/lambdas
+        run: |
+          python import_lambdas.py
+
+      - name: Importar Flows
+        if: ${{ inputs.import_all || inputs.flows }}
+        env:
+          IMPORT_FOLDER: ${{ steps.vars.outputs.folder }}/Flows
+          CONNECT_INSTANCE_ID: ${{ steps.vars.outputs.connectInstanceId }}
+        run: |
+          python import_flows.py
+
+      - name: Importar Queues
+        if: ${{ inputs.import_all || inputs.queues }}
+        env:
+          IMPORT_FOLDER: ${{ steps.vars.outputs.folder }}/queues
+        run: |
+          python import_queues.py
+
+      - name: Importar Usuarios
+        if: ${{ inputs.import_all || inputs.users }}
+        env:
+          IMPORT_FOLDER: ${{ steps.vars.outputs.folder }}/users
+          CONNECT_INSTANCE_ID: ${{ steps.vars.outputs.connectInstanceId }}
+        run: |
+          python import_users.py
+
+      # ==============================
+      # 4. LOG DE IMPORTACIÓN
+      # ==============================
+      - name: Registrar resultado
+        run: |
+          echo "✅ Importación completada para ${{ inputs.release_name }} → ${{ inputs.target_envs }}"
