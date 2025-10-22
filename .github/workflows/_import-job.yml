@@ -1,0 +1,88 @@
+# .github/workflows/_import-job.yml
+name: Importar a Ambiente
+
+on:
+  workflow_call:
+    inputs:
+      release:
+        required: true
+        type: string
+      environment:
+        required: true
+        type: string
+      lambdas:
+        required: true
+        type: boolean
+      flows:
+        required: true
+        type: boolean
+      queues:
+        required: true
+        type: boolean
+      users:
+        required: true
+        type: boolean
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cargar ambiente
+        id: env
+        run: |
+          ENV=${{ inputs.environment }}
+          jq -r ".${ENV}" environments.json > env.json
+          echo "accountId=$(jq -r '.accountId' env.json)" >> $GITHUB_OUTPUT
+          echo "connectInstanceId=$(jq -r '.connectInstanceId' env.json)" >> $GITHUB_OUTPUT
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependencias
+        run: pip install boto3
+
+      - name: Configurar AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ steps.env.outputs.accountId }}:role/d3c-GitHubAction-AssumeRoleWithAction
+          aws-region: us-east-1
+
+      - name: Importar Lambdas
+        if: ${{ inputs.lambdas }}
+        env:
+          RELEASE_FOLDER: exports/${{ inputs.release }}
+          ENVIRONMENT: ${{ inputs.environment }}
+        run: python import_lambdas.py
+
+      - name: Importar Flows
+        if: ${{ inputs.flows }}
+        env:
+          RELEASE_FOLDER: exports/${{ inputs.release }}
+          CONNECT_INSTANCE_ID: ${{ steps.env.outputs.connectInstanceId }}
+        run: python import_flows.py
+
+      - name: Importar Queues
+        if: ${{ inputs.queues }}
+        env:
+          RELEASE_FOLDER: exports/${{ inputs.release }}
+        run: python import_queues.py
+
+      - name: Importar Usuarios
+        if: ${{ inputs.users }}
+        env:
+          RELEASE_FOLDER: exports/${{ inputs.release }}
+          CONNECT_INSTANCE_ID: ${{ steps.env.outputs.connectInstanceId }}
+        run: python import_users.py
+
+      - name: Resumen
+        run: |
+          echo "Importado ${{ inputs.release }} → ${{ inputs.environment }}"

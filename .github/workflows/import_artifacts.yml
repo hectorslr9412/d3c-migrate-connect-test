@@ -1,0 +1,157 @@
+# .github/workflows/import.yml
+name: Importar Release (Secuencial)
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'Release a importar'
+        required: true
+        type: choice
+        # Se genera dinámicamente abajo
+      lambdas:
+        description: 'Importar Lambdas'
+        type: boolean
+        default: true
+      flows:
+        description: 'Importar Flows'
+        type: boolean
+        default: false
+      queues:
+        description: 'Importar Queues'
+        type: boolean
+        default: false
+      users:
+        description: 'Importar Usuarios'
+        type: boolean
+        default: false
+
+      target_dev:
+        description: 'Importar a DEV'
+        type: boolean
+        default: true
+      target_qa:
+        description: 'Después → Importar a QA'
+        type: boolean
+        default: false
+      target_prod:
+        description: 'Después → Importar a PROD'
+        type: boolean
+        default: false
+
+jobs:
+  # ==============================
+  # 1. GENERAR LISTA DE RELEASES
+  # ==============================
+  generate-release-list:
+    runs-on: ubuntu-latest
+    outputs:
+      releases: ${{ steps.list.outputs.releases }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Listar releases
+        id: list
+        run: |
+          RELEASES=$(find exports -maxdepth 1 -type d -name "release-*" | sed 's|exports/||' | sort -r | jq -R . | jq -s .)
+          echo "releases=$RELEASES" >> $GITHUB_OUTPUT
+          echo "Releases encontrados:"
+          echo "$RELEASES" | jq -r '.[]'
+
+  # ==============================
+  # 2. VALIDAR Y PREPARAR
+  # ==============================
+  validate:
+    needs: generate-release-list
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validar release
+        run: |
+          SELECTED="${{ inputs.release }}"
+          AVAILABLE='${{ needs.generate-release-list.outputs.releases }}'
+          if ! echo "$AVAILABLE" | jq -e --arg r "$SELECTED" 'contains([$r])' > /dev/null; then
+            echo "ERROR: Release '$SELECTED' no existe."
+            echo "Disponibles:"
+            echo "$AVAILABLE" | jq -r '.[]'
+            exit 1
+          fi
+          echo "Release válido: $SELECTED"
+
+  # ==============================
+  # 3. IMPORTAR A DEV
+  # ==============================
+  import-dev:
+    if: ${{ inputs.target_dev }}
+    needs: validate
+    uses: ./.github/workflows/_import-job.yml
+    with:
+      release: ${{ inputs.release }}
+      environment: dev
+      lambdas: ${{ inputs.lambdas }}
+      flows: ${{ inputs.flows }}
+      queues: ${{ inputs.queues }}
+      users: ${{ inputs.users }}
+    secrets: inherit
+
+  # ==============================
+  # 4. ESPERAR APROBACIÓN QA
+  # ==============================
+  wait-qa:
+    if: ${{ inputs.target_qa }}
+    needs: import-dev
+    runs-on: ubuntu-latest
+    steps:
+      - name: Esperar aprobación manual
+        uses: trstringer/manual-approval@v1
+        with:
+          approvers: ${{ github.actor }}
+          minimum-approvals: 1
+          description: '¿Importar a QA?'
+
+  # ==============================
+  # 5. IMPORTAR A QA
+  # ==============================
+  import-qa:
+    if: ${{ inputs.target_qa }}
+    needs: wait-qa
+    uses: ./.github/workflows/_import-job.yml
+    with:
+      release: ${{ inputs.release }}
+      environment: qa
+      lambdas: ${{ inputs.lambdas }}
+      flows: ${{ inputs.flows }}
+      queues: ${{ inputs.queues }}
+      users: ${{ inputs.users }}
+    secrets: inherit
+
+  # ==============================
+  # 6. ESPERAR APROBACIÓN PROD
+  # ==============================
+  wait-prod:
+    if: ${{ inputs.target_prod }}
+    needs: import-qa
+    runs-on: ubuntu-latest
+    steps:
+      - name: Esperar aprobación manual
+        uses: trstringer/manual-approval@v1
+        with:
+          approvers: ${{ github.actor }}
+          minimum-approvals: 1
+          description: '¿Importar a PROD? (¡CUIDADO!)'
+
+  # ==============================
+  # 7. IMPORTAR A PROD
+  # ==============================
+  import-prod:
+    if: ${{ inputs.target_prod }}
+    needs: wait-prod
+    uses: ./.github/workflows/_import-job.yml
+    with:
+      release: ${{ inputs.release }}
+      environment: prod
+      lambdas: ${{ inputs.lambdas }}
+      flows: ${{ inputs.flows }}
+      queues: ${{ inputs.queues }}
+      users: ${{ inputs.users }}
+    secrets: inherit
