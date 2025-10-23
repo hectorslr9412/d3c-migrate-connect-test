@@ -72,7 +72,7 @@ def ensure_role(role_data, attached_policies, inline_policies):
     return f"arn:aws:iam::{ACCOUNT_ID}:role/{role_name}"
 
 # === MAIN IMPORT LOOP ===
-files = [f for f in os.listdir(IMPORT_FOLDER) if f.endswith(".json") and f != "exported_lambdas.json"]
+files = [f for f in os.listdir(IMPORT_FOLDER) if f.endswith(".json") and f != "summary.json"]
 
 for f_name in files:
     print(f_name)
@@ -80,9 +80,8 @@ for f_name in files:
     with open(path) as f:
         data = json.load(f)
 
-    name = data["name"]
-    config = data["config"]
-    role = data["role"]
+    name = data["FunctionName"]
+    role = data["Role"]
     attached_policies = data["attached_policies"]
     inline_policies = data["inline_policies"]
 
