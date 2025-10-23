@@ -47,7 +47,7 @@ def ensure_role(role_data, attached_policies, inline_policies):
             AssumeRolePolicyDocument=json.dumps(role_data["AssumeRolePolicyDocument"]),
             Description=role_data.get("Description", "Imported from export"),
         )
-        time.sleep(5)
+        time.sleep(50)
 
     # === Adjuntar Managed Policies ===
     for p in attached_policies:
