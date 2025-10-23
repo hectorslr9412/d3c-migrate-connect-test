@@ -1,6 +1,6 @@
 {
   "lambdas": [
-    "brp-us-east-1-p-connect-sms-lambda"
+    "brp-sns-subscription-lambda"
   ],
   "flows": [
     "D3clarity: Customer Profiles"
