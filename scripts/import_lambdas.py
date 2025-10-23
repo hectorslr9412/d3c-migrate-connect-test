@@ -1,102 +1,110 @@
 import boto3
 import json
 import os
-import time
+import zipfile
 from botocore.exceptions import ClientError
 
-IMPORT_FOLDER = os.getenv("IMPORT_FOLDER", "exports/tmp/lambdas")
-REGION = os.getenv("AWS_REGION", "us-east-1")
+DEST_PROFILE = "brp-dev"  # Perfil destino (ajusta si usas roles desde GitHub)
+REGION = "us-east-1"
+EXPORT_FOLDER = "exports/lambdas"
 
-lambda_client = boto3.client("lambda", region_name=REGION)
-iam_client = boto3.client("iam", region_name=REGION)
-sts_client = boto3.client("sts", region_name=REGION)
+session = boto3.Session(profile_name=DEST_PROFILE, region_name=REGION)
+lambda_client = session.client("lambda")
+iam_client = session.client("iam")
 
-ACCOUNT_ID = sts_client.get_caller_identity()["Account"]
+# ID de la cuenta destino
+sts_client = session.client("sts")
+DEST_ACCOUNT_ID = sts_client.get_caller_identity()["Account"]
 
+def ensure_role_exists(role_arn):
+    """Valida si el rol existe, y si no, lo crea con el nuevo account ID"""
+    role_name = role_arn.split("/")[-1]
 
-def wait_for_lambda(function_name, timeout=60):
-    """Wait until Lambda is ready for updates"""
-    start = time.time()
-    while True:
-        try:
-            state = lambda_client.get_function_configuration(FunctionName=function_name)
-            status = state.get("LastUpdateStatus", "Successful")
-            if status == "InProgress":
-                time.sleep(2)
-            elif status == "Failed":
-                raise Exception(f"Lambda update failed: {state.get('LastUpdateStatusReason')}")
-            else:
-                break
-        except ClientError:
-            if time.time() - start > timeout:
-                raise TimeoutError(f"Timeout waiting for Lambda {function_name}")
-            time.sleep(2)
-
-
-# === MAIN IMPORT LOOP ===
-files = [f for f in os.listdir(IMPORT_FOLDER) if f.endswith(".json") and f != "summary.json"]
-
-for f_name in files:
-    print(f"📄 Procesando {f_name}...")
-    path = f"{IMPORT_FOLDER}/{f_name}"
-    with open(path) as f:
-        data = json.load(f)
-
-    # Extraer nombre y configuración
-    name = data["FunctionName"]
-    config = data
-
-    # Validar ZIP
-    zip_file = f"{IMPORT_FOLDER}/{name}.zip"
-    if not os.path.exists(zip_file):
-        print(f"❌ No se encontró el archivo ZIP para {name}, se omite.")
-        continue
-
-    with open(zip_file, "rb") as z:
-        code_bytes = z.read()
-
-    # Verificar si existe la Lambda
-    exists = True
     try:
-        lambda_client.get_function(FunctionName=name)
-    except lambda_client.exceptions.ResourceNotFoundException:
-        exists = False
-
-    if not exists:
-        print(f"🚀 Creando Lambda {name}...")
-        lambda_client.create_function(
-            FunctionName=name,
-            Runtime=config["Runtime"],
-            Role=config["Role"],  # Usa el mismo ARN del export
-            Handler=config["Handler"],
-            Code={"ZipFile": code_bytes},
-            Description=config.get("Description", ""),
-            Timeout=config["Timeout"],
-            MemorySize=config["MemorySize"],
-            Publish=True,
-            Environment=config.get("Environment", {}),
-            Layers=config.get("Layers", []),
-            PackageType=config.get("PackageType", "Zip"),
-            Architectures=config.get("Architectures", ["x86_64"]),
+        iam_client.get_role(RoleName=role_name)
+        print(f"✅ Rol existente: {role_name}")
+    except ClientError:
+        print(f"⚙️  Creando rol: {role_name}")
+        assume_role_policy = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {"Service": "lambda.amazonaws.com"},
+                    "Action": "sts:AssumeRole"
+                }
+            ]
+        }
+        iam_client.create_role(
+            RoleName=role_name,
+            AssumeRolePolicyDocument=json.dumps(assume_role_policy),
         )
-    else:
-        print(f"🔁 Actualizando Lambda {name}...")
-        wait_for_lambda(name)
-        lambda_client.update_function_code(FunctionName=name, ZipFile=code_bytes, Publish=True)
-        wait_for_lambda(name)
-        lambda_client.update_function_configuration(
-            FunctionName=name,
-            Role=config["Role"],
-            Handler=config["Handler"],
-            Description=config.get("Description", ""),
-            Timeout=config["Timeout"],
-            MemorySize=config["MemorySize"],
-            Environment=config.get("Environment", {}),
-            Layers=config.get("Layers", []),
-            Runtime=config["Runtime"],
+
+        # Agregar políticas básicas
+        iam_client.attach_role_policy(
+            RoleName=role_name,
+            PolicyArn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
         )
-        wait_for_lambda(name)
+        iam_client.attach_role_policy(
+            RoleName=role_name,
+            PolicyArn="arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        )
+        print(f"✅ Rol creado: {role_name}")
 
-    print(f"✅ Lambda {name} importada correctamente.")
+    return f"arn:aws:iam::{DEST_ACCOUNT_ID}:role/{role_name}"
 
-print("\n🎉 Importación completada con éxito.")
+def import_lambda_from_json(json_path, zip_path):
+    with open(json_path) as f:
+        config = json.load(f)
+
+    name = config["FunctionName"]
+    role_arn = config["Role"]
+    role_arn = ensure_role_exists(role_arn)
+
+    try:
+        with open(zip_path, "rb") as f:
+            code_bytes = f.read()
+
+        # Intentar actualizar si ya existe
+        try:
+            lambda_client.get_function(FunctionName=name)
+            print(f"🔄 Actualizando Lambda existente: {name}")
+            lambda_client.update_function_code(
+                FunctionName=name,
+                ZipFile=code_bytes
+            )
+            lambda_client.update_function_configuration(
+                FunctionName=name,
+                Role=role_arn,
+                Handler=config["Handler"],
+                Runtime=config["Runtime"],
+                Timeout=config.get("Timeout", 3),
+                MemorySize=config.get("MemorySize", 128),
+                Environment=config.get("Environment", {})
+            )
+        except ClientError:
+            print(f"🚀 Creando nueva Lambda: {name}")
+            lambda_client.create_function(
+                FunctionName=name,
+                Runtime=config["Runtime"],
+                Role=role_arn,
+                Handler=config["Handler"],
+                Code={"ZipFile": code_bytes},
+                Description=config.get("Description", ""),
+                Timeout=config.get("Timeout", 3),
+                MemorySize=config.get("MemorySize", 128),
+                Environment=config.get("Environment", {})
+            )
+
+        print(f"✅ Lambda importada: {name}")
+
+    except Exception as e:
+        print(f"❌ Error importando {name}: {e}")
+
+# === MAIN ===
+for file in os.listdir(EXPORT_FOLDER):
+    if file.endswith(".json"):
+        json_path = os.path.join(EXPORT_FOLDER, file)
+        zip_path = json_path.replace(".json", ".zip")
+        if os.path.exists(zip_path):
+            import_lambda_from_json(json_path, zip_path)
