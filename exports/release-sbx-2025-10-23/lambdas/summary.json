@@ -2,5 +2,9 @@
   {
     "name": "hl-test",
     "status": "success"
+  },
+  {
+    "name": "hl_mcim_auth",
+    "status": "success"
   }
 ]
