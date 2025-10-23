@@ -99,7 +99,7 @@ jobs:
         if: ${{ inputs.import_all || inputs.lambdas }}
         env:
           IMPORT_FOLDER: ${{ steps.vars.outputs.folder }}/lambdas
-        run: python import_lambdas.py
+        run: python scripts/import_lambdas.py
 
       - name: Importar Flows
         if: ${{ inputs.import_all || inputs.flows }}
