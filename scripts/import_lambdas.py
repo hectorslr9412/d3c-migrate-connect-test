@@ -6,7 +6,7 @@ from botocore.exceptions import ClientError
 
 DEST_PROFILE = "brp-dev"  # Perfil destino (ajusta si usas roles desde GitHub)
 REGION = "us-east-1"
-EXPORT_FOLDER = "exports/lambdas"
+EXPORT_FOLDER = os.getenv("IMPORT_FOLDER", "exports/lambdas")
 
 session = boto3.Session(profile_name=DEST_PROFILE, region_name=REGION)
 lambda_client = session.client("lambda")
