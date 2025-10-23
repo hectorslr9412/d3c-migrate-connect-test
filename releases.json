@@ -14,5 +14,13 @@
     "exported": [
       "lambdas"
     ]
+  },
+  {
+    "name": "release-sbx-2025-10-23",
+    "environment": "sbx",
+    "date": "2025-10-23",
+    "exported": [
+      "lambdas"
+    ]
   }
 ]

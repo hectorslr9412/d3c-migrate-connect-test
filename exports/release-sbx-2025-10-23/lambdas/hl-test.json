@@ -1,52 +1,44 @@
 {
-  "name": "hl-test",
-  "config": {
-    "FunctionName": "hl-test",
-    "FunctionArn": "arn:aws:lambda:us-east-1:094993749728:function:hl-test",
-    "Runtime": "python3.13",
-    "Role": "arn:aws:iam::094993749728:role/service-role/hl-test-role-vornw0oz",
-    "Handler": "lambda_function.lambda_handler",
-    "CodeSize": 15372756,
-    "Description": "",
-    "Timeout": 3,
-    "MemorySize": 128,
-    "LastModified": "2025-10-20T18:38:05.000+0000",
-    "CodeSha256": "O4n+gAV7GCwRS6cGDOSOgvOeueDmnNsj+E5lcf5QI/k=",
-    "Version": "$LATEST",
-    "Environment": {
-      "Variables": {
-        "Aux": "Aux",
-        "Test": "Test"
-      }
-    },
-    "TracingConfig": {
-      "Mode": "PassThrough"
-    },
-    "RevisionId": "729dcb69-0b2f-4e51-803a-98f3f52aac53",
-    "State": "Active",
-    "LastUpdateStatus": "Successful",
-    "PackageType": "Zip",
-    "Architectures": [
-      "x86_64"
-    ],
-    "EphemeralStorage": {
-      "Size": 512
-    },
-    "SnapStart": {
-      "ApplyOn": "None",
-      "OptimizationStatus": "Off"
-    },
-    "RuntimeVersionConfig": {
-      "RuntimeVersionArn": "arn:aws:lambda:us-east-1::runtime:fe7a78198cc1037d599c8e576c9b94c4d6b88f8067b86f7d3481b75d9fd76c24"
-    },
-    "LoggingConfig": {
-      "LogFormat": "Text",
-      "LogGroup": "/aws/lambda/hl-test"
+  "FunctionName": "hl-test",
+  "FunctionArn": "arn:aws:lambda:us-east-1:094993749728:function:hl-test",
+  "Runtime": "python3.13",
+  "Role": "arn:aws:iam::094993749728:role/service-role/hl-test-role-vornw0oz",
+  "Handler": "lambda_function.lambda_handler",
+  "CodeSize": 15372756,
+  "Description": "",
+  "Timeout": 3,
+  "MemorySize": 128,
+  "LastModified": "2025-10-20T18:38:05.000+0000",
+  "CodeSha256": "O4n+gAV7GCwRS6cGDOSOgvOeueDmnNsj+E5lcf5QI/k=",
+  "Version": "$LATEST",
+  "Environment": {
+    "Variables": {
+      "Aux": "Aux",
+      "Test": "Test"
     }
   },
-  "role": {
-    "Path": "/service-role/",
-    "RoleName": "hl-test-role-vornw0oz",
-    "RoleId": "AROARMHQRS3QGNKAUQXRW",
-    "Arn": "arn:aws:iam::094993749728:role/service-role/hl-test-role-vornw0oz",
-    "CreateDate": 
+  "TracingConfig": {
+    "Mode": "PassThrough"
+  },
+  "RevisionId": "729dcb69-0b2f-4e51-803a-98f3f52aac53",
+  "State": "Active",
+  "LastUpdateStatus": "Successful",
+  "PackageType": "Zip",
+  "Architectures": [
+    "x86_64"
+  ],
+  "EphemeralStorage": {
+    "Size": 512
+  },
+  "SnapStart": {
+    "ApplyOn": "None",
+    "OptimizationStatus": "Off"
+  },
+  "RuntimeVersionConfig": {
+    "RuntimeVersionArn": "arn:aws:lambda:us-east-1::runtime:fe7a78198cc1037d599c8e576c9b94c4d6b88f8067b86f7d3481b75d9fd76c24"
+  },
+  "LoggingConfig": {
+    "LogFormat": "Text",
+    "LogGroup": "/aws/lambda/hl-test"
+  }
+}
