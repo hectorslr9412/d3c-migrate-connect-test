@@ -1,7 +1,6 @@
 {
   "lambdas": [
-    "hl-test",
-    "hl_mcim_auth"
+    "hl-test"
   ],
   "flows": [
     "D3clarity: Customer Profiles"
