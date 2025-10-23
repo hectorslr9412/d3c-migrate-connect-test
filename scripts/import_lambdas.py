@@ -75,6 +75,7 @@ def ensure_role(role_data, attached_policies, inline_policies):
 files = [f for f in os.listdir(IMPORT_FOLDER) if f.endswith(".json") and f != "exported_lambdas.json"]
 
 for f_name in files:
+    print(f_name)
     path = f"{IMPORT_FOLDER}/{f_name}"
     with open(path) as f:
         data = json.load(f)
