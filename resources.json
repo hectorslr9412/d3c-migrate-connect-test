@@ -1,7 +1,6 @@
 {
   "lambdas": [
-    "hl-test",
-    "hl_mcim_auth"
+    "brp-us-east-1-p-connect-sms-lambda"
   ],
   "flows": [
     "D3clarity: Customer Profiles"
