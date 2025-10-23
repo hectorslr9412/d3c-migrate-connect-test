@@ -1,0 +1,75 @@
+{
+  "FunctionName": "brp-sns-subscription-lambda",
+  "Configuration": {
+    "FunctionName": "brp-sns-subscription-lambda",
+    "FunctionArn": "arn:aws:lambda:us-east-1:800293098955:function:brp-sns-subscription-lambda",
+    "Runtime": "python3.12",
+    "Role": "arn:aws:iam::800293098955:role/brp-sms-event-sns-policy",
+    "Handler": "lambda_function.lambda_handler",
+    "CodeSize": 344,
+    "Description": "",
+    "Timeout": 3,
+    "MemorySize": 128,
+    "LastModified": "2025-10-22T20:21:02.994+0000",
+    "CodeSha256": "oLQeWEBjPk+JaZ5R7FYZxFByX9bSKL7U2aRk4TomZPM=",
+    "Version": "$LATEST",
+    "TracingConfig": {
+      "Mode": "PassThrough"
+    },
+    "RevisionId": "40744fd6-8837-46a2-93d2-c0416255ae8c",
+    "Layers": [],
+    "State": "Active",
+    "LastUpdateStatus": "Successful",
+    "PackageType": "Zip",
+    "Architectures": [
+      "x86_64"
+    ],
+    "EphemeralStorage": {
+      "Size": 512
+    },
+    "SnapStart": {
+      "ApplyOn": "None",
+      "OptimizationStatus": "Off"
+    },
+    "RuntimeVersionConfig": {
+      "RuntimeVersionArn": "arn:aws:lambda:us-east-1::runtime:644f999c44288c3dd580a0b58d0576fe347ce4d089106e2c52ed35b626e0fb3c"
+    },
+    "LoggingConfig": {
+      "LogFormat": "Text",
+      "LogGroup": "/aws/lambda/brp-sns-subscription-lambda"
+    }
+  },
+  "Role": {
+    "Path": "/",
+    "RoleName": "brp-sms-event-sns-policy",
+    "RoleId": "AROA3UVJPSXFWMVR4TJSA",
+    "Arn": "arn:aws:iam::800293098955:role/brp-sms-event-sns-policy",
+    "CreateDate": "2025-10-22 20:20:48+00:00",
+    "AssumeRolePolicyDocument": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "lambda.amazonaws.com"
+          },
+          "Action": "sts:AssumeRole"
+        }
+      ]
+    },
+    "Description": "Imported role for Lambda",
+    "MaxSessionDuration": 3600,
+    "RoleLastUsed": {}
+  },
+  "AttachedPolicies": [
+    {
+      "PolicyName": "AWSLambdaSNSPublishPolicyExecutionRole-0483aff8-826e-4b1c-9cfb-01fe55c1afb7",
+      "PolicyArn": "arn:aws:iam::800293098955:policy/AWSLambdaSNSPublishPolicyExecutionRole-0483aff8-826e-4b1c-9cfb-01fe55c1afb7"
+    },
+    {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  ],
+  "InlinePolicies": {}
+}

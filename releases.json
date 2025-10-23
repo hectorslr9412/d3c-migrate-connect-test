@@ -62,5 +62,13 @@
     "exported": [
       "lambdas"
     ]
+  },
+  {
+    "name": "release-dev-2025-10-23",
+    "environment": "dev",
+    "date": "2025-10-23",
+    "exported": [
+      "lambdas"
+    ]
   }
 ]
