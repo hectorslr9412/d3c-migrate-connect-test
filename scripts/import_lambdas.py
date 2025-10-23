@@ -33,12 +33,10 @@ def wait_for_lambda(function_name, timeout=60):
                 raise TimeoutError(f"Timeout waiting for Lambda {function_name}")
             time.sleep(2)
 
-
 def ensure_role(role_data, attached_policies, inline_policies):
-    """Create or ensure IAM role exists with policies"""
+    """Crea o asegura que el rol IAM exista con sus políticas actualizadas"""
     role_name = role_data["RoleName"]
 
-    # === Crear o verificar rol ===
     try:
         iam_client.get_role(RoleName=role_name)
         print(f"✅ Role '{role_name}' ya existe.")
@@ -49,69 +47,53 @@ def ensure_role(role_data, attached_policies, inline_policies):
             AssumeRolePolicyDocument=json.dumps(role_data["AssumeRolePolicyDocument"]),
             Description=role_data.get("Description", "Imported from export"),
         )
-        time.sleep(3)
+        time.sleep(5)
 
-    # === Adjuntar managed policies ===
+    # === Adjuntar Managed Policies ===
     for p in attached_policies:
         policy_name = p["PolicyName"]
         policy_arn = p["PolicyArn"]
 
-        # Ver si la policy ya existe en la cuenta destino
-        local_policy_arn = f"arn:aws:iam::{ACCOUNT_ID}:policy/{policy_name}"
-        exists = False
-        try:
-            iam_client.get_policy(PolicyArn=local_policy_arn)
-            exists = True
-            print(f"📄 Policy '{policy_name}' ya existe en destino.")
-        except ClientError:
-            print(f"🪶 Creando policy '{policy_name}'...")
-            # Crea una policy vacía temporal (ya que el contenido no se exportó en este ejemplo)
-            policy_doc = {
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
-                        "Resource": "*"
-                    }
-                ]
-            }
-            try:
-                iam_client.create_policy(
-                    PolicyName=policy_name,
-                    PolicyDocument=json.dumps(policy_doc),
-                    Description=f"Imported placeholder for {policy_name}",
-                )
-                exists = True
-                time.sleep(2)
-            except ClientError as e:
-                print(f"⚠️ Error creando policy '{policy_name}': {e}")
+        # Si la política no es global (aws) reemplazamos el ID de cuenta origen por el destino
+        if ":aws:" not in policy_arn:
+            src_account = role_data["Arn"].split(":")[4]
+            policy_arn = policy_arn.replace(src_account, ACCOUNT_ID)
 
-        # Adjuntar policy al rol
-        if exists:
+        try:
+            # Verificar si la política existe antes de adjuntar
+            iam_client.get_policy(PolicyArn=policy_arn)
+            iam_client.attach_role_policy(RoleName=role_name, PolicyArn=policy_arn)
+            print(f"✅ Política '{policy_name}' adjuntada al role '{role_name}'.")
+        except ClientError as e:
+            print(f"⚠️ Política '{policy_name}' no encontrada. Usando AWSLambdaBasicExecutionRole.")
             try:
                 iam_client.attach_role_policy(
                     RoleName=role_name,
-                    PolicyArn=local_policy_arn
+                    PolicyArn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
                 )
-                print(f"✅ Policy '{policy_name}' adjuntada a rol '{role_name}'.")
-            except ClientError as e:
-                if "EntityAlreadyExists" not in str(e):
-                    print(f"⚠️ Error adjuntando policy '{policy_name}': {e}")
+            except ClientError as e2:
+                print(f"❌ No se pudo adjuntar política por defecto: {e2}")
 
-    # === Inline policies ===
+    # === Inline Policies ===
     for pol_name, pol_doc in inline_policies.items():
+        pol_doc_str = json.dumps(pol_doc)
+        src_account = role_data["Arn"].split(":")[4]
+
+        # Reemplazar cualquier ARN con el ID de cuenta del destino
+        pol_doc_str = pol_doc_str.replace(src_account, ACCOUNT_ID)
+
         try:
             iam_client.put_role_policy(
                 RoleName=role_name,
                 PolicyName=pol_name,
-                PolicyDocument=json.dumps(pol_doc)
+                PolicyDocument=pol_doc_str
             )
-            print(f"✅ Inline policy '{pol_name}' agregada a rol '{role_name}'.")
+            print(f"✅ Inline policy '{pol_name}' actualizada en '{role_name}'.")
         except ClientError as e:
-            print(f"⚠️ Error agregando inline policy '{pol_name}': {e}")
+            print(f"❌ Error al aplicar inline policy '{pol_name}': {e}")
 
     return f"arn:aws:iam::{ACCOUNT_ID}:role/{role_name}"
+
 
 
 # === LOOP PRINCIPAL DE IMPORTACIÓN ===
@@ -131,7 +113,7 @@ for f_name in files:
 
     print(f"\n=== Importando Lambda: {name} ===")
 
-    # Asegurar que el rol exista con sus políticas
+    # Asegurar que el rol exista
     dest_role_arn = ensure_role(role, attached_policies, inline_policies)
 
     # Verificar ZIP
