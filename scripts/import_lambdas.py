@@ -4,6 +4,7 @@ import os
 import time
 from botocore.exceptions import ClientError
 
+# === CONFIG ===
 IMPORT_FOLDER = os.getenv("IMPORT_FOLDER", "exports/tmp/lambdas")
 REGION = os.getenv("AWS_REGION", "us-east-1")
 
@@ -13,6 +14,7 @@ sts_client = boto3.client("sts", region_name=REGION)
 
 ACCOUNT_ID = sts_client.get_caller_identity()["Account"]
 
+# === FUNCIONES ===
 def wait_for_lambda(function_name, timeout=60):
     """Wait until Lambda is ready for updates"""
     start = time.time()
@@ -49,61 +51,62 @@ def ensure_role(role_data, attached_policies, inline_policies):
     # Adjuntar managed policies
     for p in attached_policies:
         arn = p["PolicyArn"]
-        if ":aws:" in arn:
-            final_arn = arn  # Política administrada de AWS
-        else:
+        # Reemplazar account ID si no es policy de AWS
+        if ":aws:" not in arn:
             arn = arn.replace(role_data["Arn"].split(":")[4], ACCOUNT_ID)
-            final_arn = arn
         try:
-            iam_client.attach_role_policy(RoleName=role_name, PolicyArn=final_arn)
+            iam_client.attach_role_policy(RoleName=role_name, PolicyArn=arn)
         except ClientError:
             pass
 
     # Inline policies
-    for name in inline_policies:
-        pol = role_data.get("PolicyDocument", {})
-        if pol:
+    for pol_name, pol_doc in inline_policies.items():
+        try:
             iam_client.put_role_policy(
                 RoleName=role_name,
-                PolicyName=name,
-                PolicyDocument=json.dumps(pol)
+                PolicyName=pol_name,
+                PolicyDocument=json.dumps(pol_doc)
             )
+        except ClientError:
+            pass
 
     return f"arn:aws:iam::{ACCOUNT_ID}:role/{role_name}"
 
-# === MAIN IMPORT LOOP ===
+# === LOOP PRINCIPAL DE IMPORTACIÓN ===
 files = [f for f in os.listdir(IMPORT_FOLDER) if f.endswith(".json") and f != "summary.json"]
 
 for f_name in files:
-    print(f_name)
-    path = f"{IMPORT_FOLDER}/{f_name}"
+    print(f"\n📂 Procesando archivo: {f_name}")
+    path = os.path.join(IMPORT_FOLDER, f_name)
     with open(path) as f:
         data = json.load(f)
 
     name = data["FunctionName"]
+    config = data["Configuration"]
     role = data["Role"]
-    attached_policies = data["attached_policies"]
-    inline_policies = data["inline_policies"]
+    attached_policies = data.get("AttachedPolicies", [])
+    inline_policies = data.get("InlinePolicies", {})
 
     print(f"\n=== Importando Lambda: {name} ===")
 
     # Asegurar que el rol exista
     dest_role_arn = ensure_role(role, attached_policies, inline_policies)
 
-    zip_file = f"{IMPORT_FOLDER}/{name}.zip"
+    # Verificar ZIP
+    zip_file = os.path.join(IMPORT_FOLDER, f"{name}.zip")
     if not os.path.exists(zip_file):
         print(f"❌ No se encontró el archivo ZIP para {name}, se omite.")
         continue
 
-    # Verificar si existe
+    with open(zip_file, "rb") as z:
+        code_bytes = z.read()
+
+    # Verificar si la Lambda existe
     exists = True
     try:
         lambda_client.get_function(FunctionName=name)
     except lambda_client.exceptions.ResourceNotFoundException:
         exists = False
-
-    with open(zip_file, "rb") as z:
-        code_bytes = z.read()
 
     if not exists:
         print(f"🚀 Creando Lambda {name}...")
@@ -114,8 +117,8 @@ for f_name in files:
             Handler=config["Handler"],
             Code={"ZipFile": code_bytes},
             Description=config.get("Description", ""),
-            Timeout=config["Timeout"],
-            MemorySize=config["MemorySize"],
+            Timeout=config.get("Timeout", 3),
+            MemorySize=config.get("MemorySize", 128),
             Publish=True,
             Environment=config.get("Environment", {}),
             Layers=config.get("Layers", []),
@@ -132,8 +135,8 @@ for f_name in files:
             Role=dest_role_arn,
             Handler=config["Handler"],
             Description=config.get("Description", ""),
-            Timeout=config["Timeout"],
-            MemorySize=config["MemorySize"],
+            Timeout=config.get("Timeout", 3),
+            MemorySize=config.get("MemorySize", 128),
             Environment=config.get("Environment", {}),
             Layers=config.get("Layers", []),
             Runtime=config["Runtime"],
