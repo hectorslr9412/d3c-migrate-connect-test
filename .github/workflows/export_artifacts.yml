@@ -1,17 +1,17 @@
 # .github/workflows/export.yml
-name: Exportar Recursos (Modular)
+name: Export Resources (Modular)
 
 on:
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Ambiente a exportar'
+        description: 'Environment to export'
         required: true
         type: choice
         options: [dev, sbx, qa, prod]
 
       export_all:
-        description: 'Exportar TODO'
+        description: 'Export EVERYTHING'
         type: boolean
         default: false
 
@@ -31,7 +31,7 @@ on:
         default: false
 
       users:
-        description: 'Usuarios de Connect'
+        description: 'Amazon Connect Users'
         type: boolean
         default: false
 
@@ -47,9 +47,9 @@ jobs:
         uses: actions/checkout@v4
 
       # ==============================
-      # 1. CARGAR CONFIG + CALCULAR CARPETA
+      # 1. LOAD CONFIG + CALCULATE FOLDER
       # ==============================
-      - name: Configurar variables
+      - name: Configure variables
         id: vars
         run: |
           ENV=${{ inputs.environment }}
@@ -60,33 +60,33 @@ jobs:
           echo "date=${DATE}" >> $GITHUB_OUTPUT
           echo "folder=${FOLDER}" >> $GITHUB_OUTPUT
           
-          # Cargar ambiente
+          # Load environment
           jq -r ".${ENV}" environments.json > env.json
           echo "accountId=$(jq -r '.accountId' env.json)" >> $GITHUB_OUTPUT
           echo "connectInstanceId=$(jq -r '.connectInstanceId' env.json)" >> $GITHUB_OUTPUT
           echo "region=$(jq -r '.region' env.json)" >> $GITHUB_OUTPUT
 
       # ==============================
-      # 2. VALIDAR SELECCIÓN
+      # 2. VALIDATE SELECTION
       # ==============================
-      - name: Validar selección
+      - name: Validate selection
         if: ${{ !inputs.export_all && !inputs.lambdas && !inputs.flows && !inputs.queues && !inputs.users }}
         run: |
-          echo "ERROR: Debe seleccionar al menos un recurso o 'Exportar TODO'"
+          echo "ERROR: You must select at least one resource or 'Export EVERYTHING'"
           exit 1
 
       # ==============================
-      # 3. CONFIGURAR PYTHON Y AWS
+      # 3. SET UP PYTHON AND AWS
       # ==============================
-      - name: Configurar Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Instalar dependencias
+      - name: Install dependencies
         run: pip install boto3 requests jq
 
-      - name: Configurar AWS (OIDC)
+      - name: Configure AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::${{ steps.vars.outputs.accountId }}:role/d3c-GitHubAction-AssumeRoleWithAction
@@ -94,9 +94,9 @@ jobs:
           role-session-name: export-${{ inputs.environment }}-${{ github.run_id }}
 
       # ==============================
-      # 4. EXPORTAR RECURSOS (MODULAR)
+      # 4. EXPORT RESOURCES (MODULAR)
       # ==============================
-      - name: Exportar Lambdas
+      - name: Export Lambdas
         if: ${{ inputs.export_all || inputs.lambdas }}
         env:
           EXPORT_FOLDER: ${{ steps.vars.outputs.folder }}
@@ -104,7 +104,7 @@ jobs:
           mkdir -p ${{ env.EXPORT_FOLDER }}/lambdas
           python scripts/export_lambdas.py
 
-      - name: Exportar Flows
+      - name: Export Flows
         if: ${{ inputs.export_all || inputs.flows }}
         env:
           EXPORT_FOLDER: ${{ steps.vars.outputs.folder }}
@@ -113,7 +113,7 @@ jobs:
           mkdir -p ${{ env.EXPORT_FOLDER }}/Flows
           python scripts/export_flows.py
 
-      - name: Exportar Queues
+      - name: Export Queues
         if: ${{ inputs.export_all || inputs.queues }}
         env:
           EXPORT_FOLDER: ${{ steps.vars.outputs.folder }}
@@ -121,7 +121,7 @@ jobs:
           mkdir -p ${{ env.EXPORT_FOLDER }}/queues
           python scripts/export_queues.py
 
-      - name: Exportar Usuarios
+      - name: Export Users
         if: ${{ inputs.export_all || inputs.users }}
         env:
           EXPORT_FOLDER: ${{ steps.vars.outputs.folder }}
@@ -131,12 +131,9 @@ jobs:
           python scripts/export_users.py
 
       # ==============================
-      # 5. RESUMEN Y COMMIT
+      # 5. SUMMARY AND COMMIT
       # ==============================
-            # ==============================
-      # 5. RESUMEN Y COMMIT
-      # ==============================
-      - name: Generar config.json y actualizar releases.json
+      - name: Generate config.json and update releases.json
         run: |
           FOLDER="${{ steps.vars.outputs.folder }}"
           SELECTED=()
@@ -146,7 +143,7 @@ jobs:
           ${{ inputs.queues }} && SELECTED+=("queues")
           ${{ inputs.users }} && SELECTED+=("users")
 
-          # === GUARDAR CONFIG DEL RELEASE ===
+          # === SAVE RELEASE CONFIG ===
           cat > ${FOLDER}/config.json << EOF
           {
             "source": "${{ inputs.environment }}",
@@ -157,7 +154,7 @@ jobs:
 
           RELEASE_NAME=$(basename "$FOLDER")
 
-          # === ACTUALIZAR releases.json ===
+          # === UPDATE releases.json ===
           RELEASES_FILE="releases.json"
 
           if [ ! -f "$RELEASES_FILE" ]; then

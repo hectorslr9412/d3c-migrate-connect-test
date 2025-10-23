@@ -1,22 +1,22 @@
-name: Importar Recursos (Manual)
+name: Import Resources
 
 on:
   workflow_dispatch:
     inputs:
       release_name:
-        description: 'Nombre exacto del release a importar (ej: release-dev-2025-10-22)'
+        description: 'Exact name of the release to import (e.g., release-dev-2025-10-22)'
         required: true
         type: string
         default: release-sbx-2025-10-22
 
       target_envs:
-        description: 'Ambiente destino'
+        description: 'Target environment'
         required: true
         type: choice
         options: [dev, sbx, qa, prod]
 
       import_all:
-        description: 'Importar TODO'
+        description: 'Import EVERYTHING'
         type: boolean
         default: false
 
@@ -36,7 +36,7 @@ on:
         default: false
 
       users:
-        description: 'Usuarios de Connect'
+        description: 'Amazon Connect Users'
         type: boolean
         default: false
 
@@ -52,9 +52,9 @@ jobs:
         uses: actions/checkout@v4
 
       # ==============================
-      # 1. CARGAR CONFIG DE DESTINO
+      # 1. LOAD TARGET CONFIGURATION
       # ==============================
-      - name: Configurar variables destino
+      - name: Configure target variables
         id: vars
         run: |
           ENV=${{ inputs.target_envs }}
@@ -62,7 +62,7 @@ jobs:
           FOLDER="exports/${RELEASE}"
 
           if [ ! -d "$FOLDER" ]; then
-            echo "❌ Error: No existe el release $RELEASE en exports/"
+            echo "❌ Error: Release $RELEASE does not exist in exports/"
             ls exports/ || true
             exit 1
           fi
@@ -75,17 +75,17 @@ jobs:
           echo "environment=${ENV}" >> $GITHUB_OUTPUT
 
       # ==============================
-      # 2. CONFIGURAR PYTHON Y AWS
+      # 2. SET UP PYTHON AND AWS
       # ==============================
-      - name: Configurar Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Instalar dependencias
+      - name: Install dependencies
         run: pip install boto3 requests jq
 
-      - name: Configurar AWS (OIDC)
+      - name: Configure AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::${{ steps.vars.outputs.accountId }}:role/d3c-GitHubAction-AssumeRoleWithAction
@@ -93,33 +93,36 @@ jobs:
           role-session-name: import-${{ inputs.target_envs }}-${{ github.run_id }}
 
       # ==============================
-      # 3. IMPORTAR RECURSOS
+      # 3. IMPORT RESOURCES
       # ==============================
-      - name: Importar Lambdas
+      - name: Import Lambdas
         if: ${{ inputs.import_all || inputs.lambdas }}
         env:
           IMPORT_FOLDER: ${{ steps.vars.outputs.folder }}/lambdas
         run: python scripts/import_lambdas.py
 
-      - name: Importar Flows
+      - name: Import Flows
         if: ${{ inputs.import_all || inputs.flows }}
         env:
           IMPORT_FOLDER: ${{ steps.vars.outputs.folder }}/Flows
           CONNECT_INSTANCE_ID: ${{ steps.vars.outputs.connectInstanceId }}
         run: python import_flows.py
 
-      - name: Importar Queues
+      - name: Import Queues
         if: ${{ inputs.import_all || inputs.queues }}
         env:
           IMPORT_FOLDER: ${{ steps.vars.outputs.folder }}/queues
         run: python import_queues.py
 
-      - name: Importar Usuarios
+      - name: Import Users
         if: ${{ inputs.import_all || inputs.users }}
         env:
           IMPORT_FOLDER: ${{ steps.vars.outputs.folder }}/users
           CONNECT_INSTANCE_ID: ${{ steps.vars.outputs.connectInstanceId }}
         run: python import_users.py
 
-      - name: Registrar resultado
-        run: echo "✅ Importación completada para ${{ inputs.release_name }} → ${{ inputs.target_envs }}"
+      # ==============================
+      # 4. LOG FINAL RESULT
+      # ==============================
+      - name: Log result
+        run: echo "✅ Import completed for ${{ inputs.release_name }} → ${{ inputs.target_envs }}"
